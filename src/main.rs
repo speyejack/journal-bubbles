@@ -8,12 +8,17 @@ use std::{
     fs::File,
     str::FromStr,
 };
-use tabled::{builder::Builder, Alignment, Style};
+use tabled::{
+    builder::Builder,
+    object::{Column, Columns},
+    Alignment, Modify, Style,
+};
 
 const BUBBLE_FILE: &str = "./bubbles.txt";
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 enum BubbleStatus {
+    Unknown,
     Empty,
     HalfFull,
     Full,
@@ -25,6 +30,7 @@ impl Display for BubbleStatus {
             BubbleStatus::Empty => f.write_char('○'),
             BubbleStatus::HalfFull => f.write_char('◐'),
             BubbleStatus::Full => f.write_char('●'),
+            BubbleStatus::Unknown => f.write_char('◌'),
         }
     }
 }
@@ -37,6 +43,7 @@ impl FromStr for BubbleStatus {
             "x" => Ok(BubbleStatus::Full),
             "/" => Ok(BubbleStatus::HalfFull),
             "o" => Ok(BubbleStatus::Empty),
+            "?" => Ok(BubbleStatus::Unknown),
             _ => Err(anyhow::anyhow!("Bad bubble char")),
         }
     }
@@ -63,7 +70,7 @@ impl Bubble {
         let statuses = days.iter().map(|x| {
             self.days
                 .get(&x)
-                .unwrap_or(&BubbleStatus::Empty)
+                .unwrap_or(&BubbleStatus::Unknown)
                 .to_string()
         });
 
@@ -143,6 +150,7 @@ fn main() -> Result<()> {
             let mut table = builder.build();
             table.with(Style::rounded());
             table.with(Alignment::center());
+            table.with(Modify::new(Columns::single(0)).with(Alignment::right()));
             println!("{table}")
         }
     };
