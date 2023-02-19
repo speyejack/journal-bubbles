@@ -16,7 +16,7 @@ use tabled::{
 
 const BUBBLE_FILE: &str = "./bubbles.txt";
 
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 enum BubbleStatus {
     Unknown,
     Empty,
@@ -119,20 +119,40 @@ fn main() -> Result<()> {
                 return Ok(());
             }
 
+            let mut bubbles: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
+
+            if day == *"count" {
+                let yesterday = today().pred_opt().unwrap();
+                let mut count = 0;
+                for bubble in bubbles {
+                    let status = bubble
+                        .days
+                        .get(&yesterday)
+                        .unwrap_or(&BubbleStatus::Unknown);
+
+                    count += if *status == BubbleStatus::Unknown {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                println!("{count}");
+                return Ok(());
+            }
+
             let week_day = Weekday::from_str(&day).unwrap();
             let today = today();
             let last_day = get_last_day(today, week_day);
 
-            let mut data: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
             let values = args().nth(2).unwrap();
             let statuses: Result<Vec<_>> = values
                 .chars()
                 .map(|x| BubbleStatus::from_str(&x.to_string()))
                 .collect();
-            for (bubble, status) in data.iter_mut().zip(statuses?) {
+            for (bubble, status) in bubbles.iter_mut().zip(statuses?) {
                 bubble.days.insert(last_day, status);
             }
-            serde_json::to_writer(File::create(BUBBLE_FILE)?, &data)?
+            serde_json::to_writer(File::create(BUBBLE_FILE)?, &bubbles)?
         }
         None => {
             let data: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
