@@ -8,11 +8,7 @@ use std::{
     fs::File,
     str::FromStr,
 };
-use tabled::{
-    builder::Builder,
-    object::{Column, Columns},
-    Alignment, Modify, Style,
-};
+use tabled::{builder::Builder, object::Columns, Alignment, Modify, Style};
 
 const BUBBLE_FILE: &str = "./bubbles.txt";
 
@@ -53,6 +49,7 @@ impl FromStr for BubbleStatus {
 struct Bubble {
     pub name: String,
     pub description: String,
+    pub brief: String,
     pub days: HashMap<NaiveDate, BubbleStatus>,
 }
 
@@ -61,6 +58,7 @@ impl Bubble {
         Bubble {
             name: name.to_string(),
             description: description.to_string(),
+            brief: "".to_string(),
             days: Default::default(),
         }
     }
@@ -69,7 +67,7 @@ impl Bubble {
         vec.push(self.name.clone());
         let statuses = days.iter().map(|x| {
             self.days
-                .get(&x)
+                .get(x)
                 .unwrap_or(&BubbleStatus::Unknown)
                 .to_string()
         });
@@ -98,49 +96,88 @@ fn get_last_day(today: NaiveDate, last_day: Weekday) -> NaiveDate {
 
 fn main() -> Result<()> {
     let first = args().nth(1);
-    match first {
-        Some(day) => {
-            if day == *"init" {
-                println!("Initing file");
-                let bubbles: Vec<Bubble> = vec![
-                    Bubble::new("Review", ""),
-                    Bubble::new("Sleep", ""),
-                    Bubble::new("Water", ""),
-                    Bubble::new("Diet", ""),
-                    Bubble::new("Stretch", ""),
-                    Bubble::new("Walk", ""),
-                    Bubble::new("Clean", ""),
-                    Bubble::new("Exercise", ""),
-                    Bubble::new("Breath", ""),
-                    Bubble::new("Writing", ""),
-                ];
+    match first.as_deref() {
+        Some("explain") => {
+            let bubbles: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
 
-                serde_json::to_writer(File::create(BUBBLE_FILE)?, &bubbles)?;
-                return Ok(());
+            let mut builder = Builder::default();
+            let columns = vec!["Task", "Brief", "Description"];
+            let columns: Vec<String> = columns.into_iter().map(|x| x.to_string()).collect();
+
+            let mut brief_sizes = [0; 2];
+
+            for bubble in &bubbles {
+                let mut split_brief = bubble.brief.split('/');
+                brief_sizes[0] = brief_sizes[0].max(split_brief.next().unwrap().chars().count());
+                brief_sizes[1] = brief_sizes[1].max(split_brief.next().unwrap().chars().count());
             }
 
+            builder.set_columns(columns);
+            for bubble in bubbles {
+                let mut old_brief = bubble.brief.split('/');
+
+                let mut brief = String::new();
+                brief.reserve(brief_sizes[0] + brief_sizes[1]);
+                let first = old_brief.next().unwrap();
+                for _ in 0..(brief_sizes[0] - (first.chars().count())) {
+                    brief.push(' ');
+                }
+                brief.push_str(&bubble.brief);
+                let second = old_brief.next().unwrap();
+                for _ in 0..(brief_sizes[1] - (second.chars().count())) {
+                    brief.push(' ');
+                }
+
+                builder.add_record([bubble.name, brief, bubble.description]);
+            }
+
+            let mut table = builder.build();
+            table.with(Style::rounded());
+            table.with(Alignment::center());
+            table.with(Modify::new(Columns::single(0)).with(Alignment::right()));
+            table.with(Modify::new(Columns::single(2)).with(Alignment::left()));
+            println!("{table}")
+        }
+        Some("init") => {
+            println!("Initing file");
+            let bubbles: Vec<Bubble> = vec![
+                Bubble::new("Review", ""),
+                Bubble::new("Sleep", ""),
+                Bubble::new("Water", ""),
+                Bubble::new("Diet", ""),
+                Bubble::new("Stretch", ""),
+                Bubble::new("Walk", ""),
+                Bubble::new("Clean", ""),
+                Bubble::new("Exercise", ""),
+                Bubble::new("Breath", ""),
+                Bubble::new("Writing", ""),
+            ];
+
+            serde_json::to_writer(File::create(BUBBLE_FILE)?, &bubbles)?;
+        }
+        Some("count") => {
+            let bubbles: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
+
+            let yesterday = today().pred_opt().unwrap();
+            let mut count = 0;
+            for bubble in bubbles {
+                let status = bubble
+                    .days
+                    .get(&yesterday)
+                    .unwrap_or(&BubbleStatus::Unknown);
+
+                count += if *status == BubbleStatus::Unknown {
+                    1
+                } else {
+                    0
+                }
+            }
+            println!("{count}");
+        }
+        Some(day) => {
             let mut bubbles: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
 
-            if day == *"count" {
-                let yesterday = today().pred_opt().unwrap();
-                let mut count = 0;
-                for bubble in bubbles {
-                    let status = bubble
-                        .days
-                        .get(&yesterday)
-                        .unwrap_or(&BubbleStatus::Unknown);
-
-                    count += if *status == BubbleStatus::Unknown {
-                        1
-                    } else {
-                        0
-                    }
-                }
-                println!("{count}");
-                return Ok(());
-            }
-
-            let week_day = Weekday::from_str(&day).unwrap();
+            let week_day = Weekday::from_str(day).unwrap();
             let today = today();
             let last_day = get_last_day(today, week_day);
 
