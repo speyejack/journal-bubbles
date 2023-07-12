@@ -65,6 +65,7 @@ impl Bubble {
     pub fn make_row(&self, days: &[NaiveDate]) -> Vec<String> {
         let mut vec = Vec::new();
         vec.push(self.name.clone());
+        vec.push(self.brief.clone());
         let statuses = days.iter().map(|x| {
             self.days
                 .get(x)
@@ -97,6 +98,35 @@ fn get_last_day(today: NaiveDate, last_day: Weekday) -> NaiveDate {
 fn main() -> Result<()> {
     let first = args().nth(1);
     match first.as_deref() {
+        Some("show") | None => {
+            let is_simple = args().nth(2).map(|x| &x == "simple").unwrap_or(true);
+            let data: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
+            let days: Vec<_> = (today() - Duration::days(6)).iter_days().take(7).collect();
+
+            let mut builder = Builder::default();
+            let mut columns = vec!["Tasks".to_string(), "Brief".to_string()];
+            if is_simple {
+                columns.remove(1);
+            }
+
+            columns.extend(days.iter().map(|x| x.format("%a\n%m/%d").to_string()));
+
+            builder.set_columns(columns);
+            for bubble in data {
+                let mut row = bubble.make_row(&days);
+
+                if is_simple {
+                    row.remove(1);
+                }
+                builder.add_record(row);
+            }
+
+            let mut table = builder.build();
+            table.with(Style::rounded());
+            table.with(Alignment::center());
+            table.with(Modify::new(Columns::single(0)).with(Alignment::right()));
+            println!("{table}")
+        }
         Some("explain") => {
             let bubbles: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
 
@@ -190,25 +220,6 @@ fn main() -> Result<()> {
                 bubble.days.insert(last_day, status);
             }
             serde_json::to_writer(File::create(BUBBLE_FILE)?, &bubbles)?
-        }
-        None => {
-            let data: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
-            let days: Vec<_> = (today() - Duration::days(6)).iter_days().take(7).collect();
-
-            let mut builder = Builder::default();
-            let mut columns = vec!["Tasks".to_string()];
-            columns.extend(days.iter().map(|x| x.format("%a\n%m/%d").to_string()));
-
-            builder.set_columns(columns);
-            for bubble in data {
-                builder.add_record(bubble.make_row(&days));
-            }
-
-            let mut table = builder.build();
-            table.with(Style::rounded());
-            table.with(Alignment::center());
-            table.with(Modify::new(Columns::single(0)).with(Alignment::right()));
-            println!("{table}")
         }
     };
     Ok(())
