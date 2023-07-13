@@ -1,82 +1,10 @@
 use anyhow::Result;
+use bubbles_core::*;
 use chrono::{Datelike, Duration, Local, NaiveDate, Weekday};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    env::args,
-    fmt::{Display, Write},
-    fs::File,
-    str::FromStr,
-};
+use std::{env::args, fs::File, str::FromStr};
 use tabled::{builder::Builder, object::Columns, Alignment, Modify, Style};
 
-const BUBBLE_FILE: &str = "./bubbles.txt";
-
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-enum BubbleStatus {
-    Unknown,
-    Empty,
-    HalfFull,
-    Full,
-}
-
-impl Display for BubbleStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BubbleStatus::Empty => f.write_char('○'),
-            BubbleStatus::HalfFull => f.write_char('◐'),
-            BubbleStatus::Full => f.write_char('●'),
-            BubbleStatus::Unknown => f.write_char('◌'),
-        }
-    }
-}
-
-impl FromStr for BubbleStatus {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "x" => Ok(BubbleStatus::Full),
-            "/" => Ok(BubbleStatus::HalfFull),
-            "o" => Ok(BubbleStatus::Empty),
-            "?" => Ok(BubbleStatus::Unknown),
-            _ => Err(anyhow::anyhow!("Bad bubble char")),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct Bubble {
-    pub name: String,
-    pub description: String,
-    pub brief: String,
-    pub days: HashMap<NaiveDate, BubbleStatus>,
-}
-
-impl Bubble {
-    pub fn new<T: ToString>(name: T, description: T) -> Self {
-        Bubble {
-            name: name.to_string(),
-            description: description.to_string(),
-            brief: "".to_string(),
-            days: Default::default(),
-        }
-    }
-    pub fn make_row(&self, days: &[NaiveDate]) -> Vec<String> {
-        let mut vec = Vec::new();
-        vec.push(self.name.clone());
-        vec.push(self.brief.clone());
-        let statuses = days.iter().map(|x| {
-            self.days
-                .get(x)
-                .unwrap_or(&BubbleStatus::Unknown)
-                .to_string()
-        });
-
-        vec.extend(statuses);
-        vec
-    }
-}
+const BUBBLE_FILE: &str = "/home/jack/Dropbox/notes/bubbles/bubbles.txt";
 
 fn today() -> NaiveDate {
     let today = Local::now();
@@ -99,7 +27,7 @@ fn main() -> Result<()> {
     let first = args().nth(1);
     match first.as_deref() {
         Some("show") | None => {
-            let is_simple = args().nth(2).map(|x| &x == "simple").unwrap_or(true);
+            let is_simple = args().nth(2).map(|x| &x == "simple").unwrap_or(false);
             let data: Vec<Bubble> = serde_json::from_reader(File::open(BUBBLE_FILE)?)?;
             let days: Vec<_> = (today() - Duration::days(6)).iter_days().take(7).collect();
 
