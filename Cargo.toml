@@ -1,5 +1,9 @@
+
 [workspace]
+resolver = "2"
 members = [
 		"bubbles-core",
-		"bubbles-cli"
+		"bubbles-cli",
+		"bubbles-server",
+		"bubbles-gui"
 ]
