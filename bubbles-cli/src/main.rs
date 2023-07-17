@@ -1,15 +1,10 @@
 use anyhow::Result;
-use bubbles_core::*;
+use bubbles_core::{bubble::Bubble, status::BubbleStatus, *};
 use chrono::{Datelike, Duration, Local, NaiveDate, Weekday};
 use std::{env::args, fs::File, str::FromStr};
 use tabled::{builder::Builder, object::Columns, Alignment, Modify, Style};
 
 const BUBBLE_FILE: &str = "/home/jack/Dropbox/notes/bubbles/bubbles.txt";
-
-fn today() -> NaiveDate {
-    let today = Local::now();
-    NaiveDate::from_yo_opt(today.year(), today.ordinal()).unwrap()
-}
 
 fn get_last_day(today: NaiveDate, last_day: Weekday) -> NaiveDate {
     let last_week = today - Duration::days(6);
