@@ -1,0 +1,13 @@
+[package]
+name = "bubbles-server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.72"
+bubbles-core = {path = "../bubbles-core"}
+serde = "1.0.171"
+serde_json = "1.0.103"
+tokio = {version="1.29.1", features=["full"]}
