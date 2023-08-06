@@ -3,7 +3,10 @@ use bubbles_core::{
     bubble::Bubble,
     web::{Request, Response},
 };
-use std::{fs::File, net::SocketAddr};
+use std::{
+    fs::{File, OpenOptions},
+    net::SocketAddr,
+};
 use tokio::{
     self,
     io::{AsyncBufReadExt, AsyncWriteExt, BufStream},
@@ -49,8 +52,10 @@ async fn process_socket(mut socket: TcpStream) -> Result<()> {
                 .zip(v.into_iter())
                 .for_each(|(f, s)| f.days.extend(s.days));
 
-            let file = File::open(BUBBLE_FILE)?;
+            let mut file = OpenOptions::new().write(true).open(BUBBLE_FILE)?;
+            println!("Opened file");
             serde_json::to_writer(file, &bubbles)?;
+            send_response(&mut socket, &Response::Success).await?;
         }
         Request::GetInfo => {
             bubbles.iter_mut().for_each(|x| x.days.clear());
