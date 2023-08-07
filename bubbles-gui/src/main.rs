@@ -175,9 +175,6 @@ fn create_row(i: usize, b: &Bubble, day: NaiveDate) -> Element<Message> {
         widget::container(widget::text(b.name.clone())).width(Length::FillPortion(1)),
         widget::container(widget::text(brief_front)).width(Length::FillPortion(1)),
         widget::container(widget::text(brief_back)).width(Length::FillPortion(3)),
-        radio("unknown", BubbleStatus::Unknown, selected, |x| {
-            Message::SetBubble(x, i)
-        }),
         radio("empty", BubbleStatus::Empty, selected, |x| {
             Message::SetBubble(x, i)
         }),
