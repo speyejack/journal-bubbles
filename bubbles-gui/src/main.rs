@@ -1,8 +1,5 @@
 #![feature(try_blocks)]
-
-
-// use std::net::{SocketAddr, TcpStream};
-use std::ops::{IndexMut};
+use std::ops::IndexMut;
 
 use bubbles_core::bubble::Bubble;
 use bubbles_core::status::BubbleStatus;
@@ -10,10 +7,9 @@ use bubbles_core::today;
 
 use chrono::NaiveDate;
 use iced::widget::{self, radio, row, Button, Column};
-use iced::{executor, Application, Command, Element, Length, Sandbox, Settings, Theme};
+use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use reqwest::Client;
-
-// use web_sys::console::log_1 as log;
+use web_sys::console::log_1 as log;
 
 fn main() -> iced::Result {
     Bubbles::run(Settings::default())
@@ -36,7 +32,7 @@ async fn async_fetch_bubbles(cli: Client) -> Result<Vec<Bubble>, ()> {
         let url = format!("{}{}/{}/{}", base_url(), ADDR, "get", 0);
         cli.get(url).send().await?.json::<Vec<Bubble>>().await?
     };
-    result.map_err(|e| println!("{}", &format!("Fetch Bubble error: {e}")))
+    result.map_err(|e| log(&format!("Fetch Bubble error: {e}").into()))
 }
 
 async fn async_send_bubbles(cli: Client, bubbles: Vec<Bubble>) -> Result<(), ()> {
