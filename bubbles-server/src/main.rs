@@ -28,7 +28,6 @@ fn get_bubbles(day_offset: Option<u64>) -> Option<Json<Vec<Bubble>>> {
         bubbles
     };
 
-    println!("Out: {out:?}");
     out.ok().map(Json)
 }
 
@@ -44,20 +43,25 @@ fn set_bubbles(new_bubbles: Json<Vec<Bubble>>) -> Option<Json<Vec<Bubble>>> {
             .zip(new_bubbles)
             .for_each(|(f, s)| f.days.extend(s.days));
 
-        let file = OpenOptions::new().write(true).open(BUBBLE_FILE)?;
-        println!("Opened file");
+        let file = OpenOptions::new().truncate(true).open(BUBBLE_FILE)?;
         serde_json::to_writer(file, &bubbles)?;
 
         bubbles
     };
 
-    println!("Out: {out:?}");
     out.ok().map(Json)
 }
 
 #[rocket::launch]
 fn rocket_main() -> _ {
-    rocket::build()
+    // rocket::build()
+    let config = rocket::Config {
+        port: 54438,
+        address: "0.0.0.0".parse().unwrap(),
+        ..Default::default()
+    };
+
+    rocket::custom(&config)
         .mount("/bubbles", routes![get_bubbles, set_bubbles])
-        .mount("/", FileServer::from(relative!("dist")))
+        .mount("/", FileServer::from(relative!("../dist")))
 }
