@@ -71,11 +71,7 @@ impl Application for Bubbles<'_> {
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
         let cli = Client::new();
 
-        let day_offset = if chrono::Local::now().hour() < 12 {
-            0
-        } else {
-            1
-        };
+        let day_offset = 0;
         let day: NaiveDate = today() - Days::new(day_offset.into());
         let day_str = Cow::Owned(day.format("%A, %Y-%m-%d").to_string());
 
