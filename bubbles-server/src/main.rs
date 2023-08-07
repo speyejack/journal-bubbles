@@ -1,81 +1,63 @@
-use anyhow::Result;
-use bubbles_core::{
-    bubble::Bubble,
-    web::{Request, Response},
+#![feature(try_blocks)]
+use bubbles_core::{bubble::Bubble, today};
+use chrono::Days;
+use rocket::{
+    fs::{relative, FileServer},
+    get, post, routes,
+    serde::json::Json,
 };
-use std::{
-    fs::{File, OpenOptions},
-    net::SocketAddr,
-};
-use tokio::{
-    self,
-    io::{AsyncBufReadExt, AsyncWriteExt, BufStream},
-    net::{TcpListener, TcpStream},
-};
+use std::fs::{File, OpenOptions};
 
-const BUBBLE_FILE: &str = "/home/jack/Documents/bubbles/test_bubbles.json";
+const BUBBLE_FILE: &str = "/home/jack/Documents/journal-bubbles/test_bubbles.json";
 
-async fn recv_request(socket: &mut TcpStream) -> Result<Request> {
-    let mut socket = BufStream::new(socket);
+#[get("/get/<day_offset>")]
+fn get_bubbles(day_offset: Option<u64>) -> Option<Json<Vec<Bubble>>> {
+    let diff = day_offset.map(|x| today() - Days::new(x));
+    let out: anyhow::Result<Vec<Bubble>> = try {
+        let file = File::open(BUBBLE_FILE)?;
+        let mut bubbles: Vec<Bubble> = serde_json::from_reader(file)?;
 
-    // let mut line = vec![];
-    let mut line = String::new();
-    socket.read_line(&mut line).await?;
+        bubbles.iter_mut().for_each(|x| {
+            let out = diff.and_then(|d| x.days.remove(&d));
+            x.days.clear();
+            if let Some(b) = out {
+                x.days.insert(diff.unwrap(), b);
+            }
+        });
 
-    // let request = serde_json::from_slice(&line)?;
-    let request = serde_json::from_str(&line)?;
+        bubbles
+    };
 
-    Ok(request)
+    println!("Out: {out:?}");
+    out.ok().map(Json)
 }
 
-async fn send_response(socket: &mut TcpStream, response: &Response) -> Result<()> {
-    let mut buff = BufStream::new(socket);
-    let data = serde_json::to_string(response)?;
-    println!("Sending data: {data}");
-    buff.write_all(data.as_bytes()).await?;
-    buff.flush().await?;
-    Ok(())
+#[post("/set", data = "<new_bubbles>")]
+fn set_bubbles(new_bubbles: Json<Vec<Bubble>>) -> Option<Json<Vec<Bubble>>> {
+    let out: anyhow::Result<Vec<Bubble>> = try {
+        let file = File::open(BUBBLE_FILE)?;
+        let mut bubbles: Vec<Bubble> = serde_json::from_reader(file)?;
+        let new_bubbles = new_bubbles.into_inner();
+
+        bubbles
+            .iter_mut()
+            .zip(new_bubbles)
+            .for_each(|(f, s)| f.days.extend(s.days));
+
+        let file = OpenOptions::new().write(true).open(BUBBLE_FILE)?;
+        println!("Opened file");
+        serde_json::to_writer(file, &bubbles)?;
+
+        bubbles
+    };
+
+    println!("Out: {out:?}");
+    out.ok().map(Json)
 }
 
-async fn process_socket(mut socket: TcpStream) -> Result<()> {
-    let request = recv_request(&mut socket).await?;
-    println!("Recv request");
-
-    let file = File::open(BUBBLE_FILE)?;
-    let mut bubbles: Vec<Bubble> = serde_json::from_reader(file)?;
-
-    println!("Got request: {request:?}");
-    match request {
-        Request::Set(v) => {
-            bubbles
-                .iter_mut()
-                .zip(v.into_iter())
-                .for_each(|(f, s)| f.days.extend(s.days));
-
-            let mut file = OpenOptions::new().write(true).open(BUBBLE_FILE)?;
-            println!("Opened file");
-            serde_json::to_writer(file, &bubbles)?;
-            send_response(&mut socket, &Response::Success).await?;
-        }
-        Request::GetInfo => {
-            bubbles.iter_mut().for_each(|x| x.days.clear());
-            send_response(&mut socket, &Response::Bubbles(bubbles)).await?;
-        }
-    }
-
-    Ok(())
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let addr = "0.0.0.0:45531".parse::<SocketAddr>()?;
-    let listen = TcpListener::bind(addr).await?;
-    loop {
-        let (socket, _) = listen.accept().await?;
-        println!("Got connection!");
-
-        if let Err(e) = process_socket(socket).await {
-            println!("error: {e}");
-        }
-    }
+#[rocket::launch]
+fn rocket_main() -> _ {
+    rocket::build()
+        .mount("/bubbles", routes![get_bubbles, set_bubbles])
+        .mount("/", FileServer::from(relative!("dist")))
 }

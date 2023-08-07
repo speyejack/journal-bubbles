@@ -1,4 +1,6 @@
+#![feature(try_blocks)]
 use std::io::{Read, Write};
+use std::net::SocketAddr;
 // use std::net::{SocketAddr, TcpStream};
 use std::ops::{Index, IndexMut};
 
@@ -9,71 +11,44 @@ use bubbles_core::web::{Request, Response};
 use chrono::NaiveDate;
 use iced::widget::{self, button, column, radio, row, Button, Column};
 use iced::{executor, Application, Command, Element, Length, Sandbox, Settings, Theme};
+use reqwest::Client;
+use serde_json::json;
 use web_sys::console::log_1 as log;
 
 fn main() -> iced::Result {
     Bubbles::run(Settings::default())
 }
 
-struct Bubbles {
+pub struct Bubbles {
+    cli: Client,
     addr: SocketAddr,
     day: NaiveDate,
     bubbles: Vec<Bubble>,
 }
 
-async fn async_fetch_bubbles(addr: SocketAddr) -> Result<Vec<Bubble>, ()> {
-    log(&"async fetch".into());
-    let result = fetch_bubbles(addr).await;
-    result.map_err(|e| {
-        // let er = e.clone();
-        println!("Bubble error: {e}");
-        log(&format!("bubble error: {}", e).into());
-    })
+const ADDR: &str = "http://127.0.0.1:8000/bubbles";
+
+async fn async_fetch_bubbles(cli: Client) -> Result<Vec<Bubble>, ()> {
+    // log(&"async fetch".into());
+    let result: anyhow::Result<_> = try {
+        let url = format!("{}/{}/{}", ADDR, "get", 0);
+        cli.get(url).send().await?.json::<Vec<Bubble>>().await?
+    };
+    result.map_err(|e| log(&format!("Bubble error: {e}").into()))
 }
 
-async fn fetch_bubbles(addr: SocketAddr) -> anyhow::Result<Vec<Bubble>> {
-    log(&"async fetch".into());
-    // let mut socket = TcpStream::connect(addr)?;
-    log(&"post socket".into());
-    let req = Request::GetInfo;
-    serde_json::to_writer(&mut socket, &req)?;
-    let _ = socket.write("\n".as_bytes())?;
-    log(&"fetching bubbles".into());
-    println!("Wrote bubbles");
-    println!("{:?}", serde_json::to_string(&req));
-
-    let response: Response = serde_json::from_reader(&mut socket)?;
-    println!("Got response");
-    match response {
-        Response::Bubbles(v) => return Ok(v),
-        _ => panic!("Bad response"),
-    }
-}
-
-async fn async_send_bubbles(addr: SocketAddr, bubbles: Vec<Bubble>) -> Result<(), ()> {
-    let result = send_bubbles(addr, bubbles).await;
+async fn async_send_bubbles(cli: Client, bubbles: Vec<Bubble>) -> Result<(), ()> {
+    let result: anyhow::Result<()> = try {
+        let url = format!("{}/{}", ADDR, "set");
+        // let json = serde_json::to_string(bubbles)?;
+        cli.post(url).json(&bubbles).send().await?;
+        // cli.post(url).body(&json).send().await?;
+    };
     result.map_err(|e| println!("Bubble error: {e}"))
 }
 
-async fn send_bubbles(addr: SocketAddr, bubbles: Vec<Bubble>) -> anyhow::Result<()> {
-    let mut socket = TcpStream::connect(addr)?;
-    let req = Request::Set(bubbles);
-    serde_json::to_writer(&mut socket, &req)?;
-    let _ = socket.write("\n".as_bytes())?;
-    socket.flush()?;
-    println!("Sent bubbles");
-
-    let response: Response = serde_json::from_reader(&mut socket)?;
-    match response {
-        Response::Success => println!("Write success"),
-        _ => anyhow::bail!("Bad response"),
-    }
-    println!("Finished sending");
-    Ok(())
-}
-
 #[derive(Clone, Debug)]
-enum Message {
+pub enum Message {
     RecvBubbles(Result<Vec<Bubble>, ()>),
     SetBubble(BubbleStatus, usize),
     SendBubbles,
@@ -87,17 +62,18 @@ impl Application for Bubbles {
     type Message = Message;
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
-        log(&"Testing logging".into());
-        let addr = "127.0.0.1:45531".parse().unwrap();
+        // log(&"Testing logging".into());
+        let cli = Client::new();
         // let values = TcpStream::connect(addr);
 
         (
             Self {
+                cli: cli.clone(),
                 addr,
                 day: today(),
                 bubbles: Default::default(),
             },
-            Command::perform(async_fetch_bubbles(addr), Message::RecvBubbles),
+            Command::perform(async_fetch_bubbles(cli), Message::RecvBubbles),
         )
     }
 
@@ -118,7 +94,7 @@ impl Application for Bubbles {
             },
             Message::SendBubbles => {
                 return Command::perform(
-                    async_send_bubbles(self.addr, self.bubbles.clone()),
+                    async_send_bubbles(self.cli.clone(), self.bubbles.clone()),
                     Message::BubbleReceipt,
                 )
             }
