@@ -8,7 +8,7 @@ use rocket::{
 };
 use std::fs::{File, OpenOptions};
 
-const BUBBLE_FILE: &str = "/home/jack/Documents/journal-bubbles/test_bubbles.json";
+const BUBBLE_FILE: &str = "./bubbles.json";
 
 #[get("/get/<day_offset>")]
 fn get_bubbles(day_offset: Option<u64>) -> Option<Json<Vec<Bubble>>> {
