@@ -1,4 +1,5 @@
 #![feature(try_blocks)]
+use std::borrow::Cow;
 use std::ops::IndexMut;
 
 use bubbles_core::bubble::Bubble;
@@ -6,19 +7,20 @@ use bubbles_core::status::BubbleStatus;
 use bubbles_core::today;
 
 use chrono::NaiveDate;
-use iced::widget::{self, radio, row, Button, Column};
+use iced::widget::{self, radio, row, Button, Column, Text};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
-use reqwest::Client;
+use reqwest::{Client, Response};
 use web_sys::console::log_1 as log;
 
 fn main() -> iced::Result {
     Bubbles::run(Settings::default())
 }
 
-pub struct Bubbles {
+pub struct Bubbles<'a> {
     cli: Client,
     day: NaiveDate,
     bubbles: Vec<Bubble>,
+    status_str: Cow<'a, str>,
 }
 
 const ADDR: &str = "/bubbles";
@@ -35,12 +37,17 @@ async fn async_fetch_bubbles(cli: Client) -> Result<Vec<Bubble>, ()> {
     result.map_err(|e| log(&format!("Fetch Bubble error: {e}").into()))
 }
 
-async fn async_send_bubbles(cli: Client, bubbles: Vec<Bubble>) -> Result<(), ()> {
-    let result: anyhow::Result<()> = try {
+async fn async_send_bubbles(cli: Client, bubbles: Vec<Bubble>) -> bool {
+    let result: anyhow::Result<Response> = try {
         let url = format!("{}{}/{}", base_url(), ADDR, "set");
-        cli.post(url).json(&bubbles).send().await?;
+        let ret = cli.post(url).json(&bubbles).send().await?;
+        ret
     };
-    result.map_err(|e| println!("Send Bubble error: {e}"))
+
+    result
+        .map(|x| x.status().is_success())
+        .map_err(|e| log(&format!("Send Bubble error: {e}").into()))
+        .unwrap_or(false)
 }
 
 #[derive(Clone, Debug)]
@@ -48,10 +55,10 @@ pub enum Message {
     RecvBubbles(Result<Vec<Bubble>, ()>),
     SetBubble(BubbleStatus, usize),
     SendBubbles,
-    BubbleReceipt(Result<(), ()>),
+    BubbleReceipt(bool),
 }
 
-impl Application for Bubbles {
+impl Application for Bubbles<'_> {
     type Theme = Theme;
     type Executor = executor::Default;
     type Flags = ();
@@ -65,6 +72,7 @@ impl Application for Bubbles {
                 cli: cli.clone(),
                 day: today(),
                 bubbles: Default::default(),
+                status_str: Cow::Borrowed("Fetching bubbles"),
             },
             Command::perform(async_fetch_bubbles(cli), Message::RecvBubbles),
         )
@@ -80,18 +88,27 @@ impl Application for Bubbles {
                 self.bubbles.index_mut(index).days.insert(self.day, status);
             }
             Message::RecvBubbles(bu) => match bu {
-                Ok(b) => self.bubbles = b,
-                Err(_e) => {
-                    println!("Error fetching bubbles");
+                Ok(b) => {
+                    self.bubbles = b;
+                    self.status_str = Cow::Borrowed("Unset bubbles")
                 }
+                Err(_e) => self.status_str = Cow::Borrowed("Failed to fetch bubbles!"),
             },
             Message::SendBubbles => {
+                self.status_str = Cow::Borrowed("Sending bubbles");
                 return Command::perform(
                     async_send_bubbles(self.cli.clone(), self.bubbles.clone()),
                     Message::BubbleReceipt,
-                )
+                );
             }
-            Message::BubbleReceipt(_) => {}
+            Message::BubbleReceipt(succ) => {
+                let val = if succ {
+                    "Set bubbles!"
+                } else {
+                    "Bubbles failed to set!"
+                };
+                self.status_str = Cow::Borrowed(val);
+            }
         }
         Command::none()
     }
@@ -103,6 +120,7 @@ impl Application for Bubbles {
             elements.push(r);
         }
         elements.push(Button::new("Send").on_press(Message::SendBubbles).into());
+        elements.push(Text::new(self.status_str.as_ref()).into());
         Column::with_children(elements).into()
     }
 }
