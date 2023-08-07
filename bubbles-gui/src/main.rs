@@ -1,19 +1,19 @@
 #![feature(try_blocks)]
-use std::io::{Read, Write};
-use std::net::SocketAddr;
+
+
 // use std::net::{SocketAddr, TcpStream};
-use std::ops::{Index, IndexMut};
+use std::ops::{IndexMut};
 
 use bubbles_core::bubble::Bubble;
 use bubbles_core::status::BubbleStatus;
 use bubbles_core::today;
-use bubbles_core::web::{Request, Response};
+
 use chrono::NaiveDate;
-use iced::widget::{self, button, column, radio, row, Button, Column};
+use iced::widget::{self, radio, row, Button, Column};
 use iced::{executor, Application, Command, Element, Length, Sandbox, Settings, Theme};
 use reqwest::Client;
-use serde_json::json;
-use web_sys::console::log_1 as log;
+
+// use web_sys::console::log_1 as log;
 
 fn main() -> iced::Result {
     Bubbles::run(Settings::default())
@@ -36,7 +36,7 @@ async fn async_fetch_bubbles(cli: Client) -> Result<Vec<Bubble>, ()> {
         let url = format!("{}{}/{}/{}", base_url(), ADDR, "get", 0);
         cli.get(url).send().await?.json::<Vec<Bubble>>().await?
     };
-    result.map_err(|e| log(&format!("Fetch Bubble error: {e}").into()))
+    result.map_err(|e| println!("{}", &format!("Fetch Bubble error: {e}")))
 }
 
 async fn async_send_bubbles(cli: Client, bubbles: Vec<Bubble>) -> Result<(), ()> {
@@ -85,7 +85,7 @@ impl Application for Bubbles {
             }
             Message::RecvBubbles(bu) => match bu {
                 Ok(b) => self.bubbles = b,
-                Err(e) => {
+                Err(_e) => {
                     println!("Error fetching bubbles");
                 }
             },

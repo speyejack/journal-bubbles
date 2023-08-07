@@ -1,6 +1,6 @@
 use anyhow::Result;
 use bubbles_core::{bubble::Bubble, status::BubbleStatus, *};
-use chrono::{Datelike, Duration, Local, NaiveDate, Weekday};
+use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use std::{env::args, fs::File, str::FromStr};
 use tabled::{builder::Builder, object::Columns, Alignment, Modify, Style};
 
