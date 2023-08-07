@@ -49,7 +49,7 @@ fn set_bubbles(new_bubbles: Json<Vec<Bubble>>) -> Option<Json<Vec<Bubble>>> {
         bubbles
     };
 
-    out.ok().map(Json)
+    out.map_err(|e| println!("Set error: {e}")).ok().map(Json)
 }
 
 #[rocket::launch]
