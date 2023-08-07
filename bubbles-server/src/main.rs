@@ -43,7 +43,10 @@ fn set_bubbles(new_bubbles: Json<Vec<Bubble>>) -> Option<Json<Vec<Bubble>>> {
             .zip(new_bubbles)
             .for_each(|(f, s)| f.days.extend(s.days));
 
-        let file = OpenOptions::new().truncate(true).open(BUBBLE_FILE)?;
+        let file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(BUBBLE_FILE)?;
         serde_json::to_writer(file, &bubbles)?;
 
         bubbles
