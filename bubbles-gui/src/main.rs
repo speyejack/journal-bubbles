@@ -6,9 +6,10 @@ use bubbles_core::bubble::Bubble;
 use bubbles_core::status::BubbleStatus;
 use bubbles_core::today;
 
-use chrono::NaiveDate;
+use chrono::{DateTime, Days, NaiveDate, Timelike};
+use iced::alignment::Horizontal;
 use iced::widget::{self, radio, row, Button, Column, Text};
-use iced::{executor, Application, Command, Element, Length, Settings, Theme};
+use iced::{executor, Alignment, Application, Command, Element, Length, Settings, Theme};
 use reqwest::{Client, Response};
 use web_sys::console::log_1 as log;
 
@@ -21,6 +22,8 @@ pub struct Bubbles<'a> {
     day: NaiveDate,
     bubbles: Vec<Bubble>,
     status_str: Cow<'a, str>,
+    day_offset: u32,
+    day_str: Cow<'a, str>,
 }
 
 const ADDR: &str = "/bubbles";
@@ -29,9 +32,9 @@ fn base_url() -> String {
     web_sys::window().unwrap().location().origin().unwrap()
 }
 
-async fn async_fetch_bubbles(cli: Client) -> Result<Vec<Bubble>, ()> {
+async fn async_fetch_bubbles(cli: Client, offset: u32) -> Result<Vec<Bubble>, ()> {
     let result: anyhow::Result<_> = try {
-        let url = format!("{}{}/{}/{}", base_url(), ADDR, "get", 0);
+        let url = format!("{}{}/{}/{}", base_url(), ADDR, "get", offset);
         cli.get(url).send().await?.json::<Vec<Bubble>>().await?
     };
     result.map_err(|e| log(&format!("Fetch Bubble error: {e}").into()))
@@ -55,6 +58,7 @@ pub enum Message {
     RecvBubbles(Result<Vec<Bubble>, ()>),
     SetBubble(BubbleStatus, usize),
     SendBubbles,
+    OffsetDay(i32),
     BubbleReceipt(bool),
 }
 
@@ -67,14 +71,27 @@ impl Application for Bubbles<'_> {
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
         let cli = Client::new();
 
+        let day_offset = if chrono::Local::now().hour() < 12 {
+            0
+        } else {
+            1
+        };
+        let day: NaiveDate = today() - Days::new(day_offset.into());
+        let day_str = Cow::Owned(day.format("%A, %Y-%m-%d").to_string());
+
         (
             Self {
                 cli: cli.clone(),
-                day: today(),
+                day,
                 bubbles: Default::default(),
+                day_offset,
+                day_str,
                 status_str: Cow::Borrowed("Fetching bubbles"),
             },
-            Command::perform(async_fetch_bubbles(cli), Message::RecvBubbles),
+            Command::perform(
+                async_fetch_bubbles(cli, day_offset.into()),
+                Message::RecvBubbles,
+            ),
         )
     }
 
@@ -109,12 +126,36 @@ impl Application for Bubbles<'_> {
                 };
                 self.status_str = Cow::Borrowed(val);
             }
+            Message::OffsetDay(o) => {
+                self.day_offset = self.day_offset.saturating_add_signed(o);
+                self.day = today() - Days::new(self.day_offset.into());
+                self.day_str = Cow::Owned(self.day.format("%A, %Y-%m-%d").to_string());
+                self.status_str = Cow::Borrowed("Fetching bubbles");
+                return Command::perform(
+                    async_fetch_bubbles(self.cli.clone(), self.day_offset),
+                    Message::RecvBubbles,
+                );
+            }
         }
         Command::none()
     }
 
     fn view(&self) -> Element<Message> {
         let mut elements = vec![];
+        elements.push(
+            row![
+                Button::new(Text::new("<").horizontal_alignment(Horizontal::Center))
+                    .on_press(Message::OffsetDay(1))
+                    .width(Length::Fixed(40.0)),
+                Text::new(self.day_str.as_ref())
+                    .horizontal_alignment(Horizontal::Center)
+                    .width(Length::Fill),
+                Button::new(Text::new(">").horizontal_alignment(Horizontal::Center))
+                    .on_press(Message::OffsetDay(-1))
+                    .width(Length::Fixed(40.0)),
+            ]
+            .into(),
+        );
         for (i, b) in self.bubbles.iter().enumerate() {
             let r = create_row(i, b, self.day);
             elements.push(r);
