@@ -21,30 +21,30 @@ fn main() -> iced::Result {
 
 pub struct Bubbles {
     cli: Client,
-    addr: SocketAddr,
     day: NaiveDate,
     bubbles: Vec<Bubble>,
 }
 
-const ADDR: &str = "http://127.0.0.1:8000/bubbles";
+const ADDR: &str = "/bubbles";
+
+fn base_url() -> String {
+    web_sys::window().unwrap().location().origin().unwrap()
+}
 
 async fn async_fetch_bubbles(cli: Client) -> Result<Vec<Bubble>, ()> {
-    // log(&"async fetch".into());
     let result: anyhow::Result<_> = try {
-        let url = format!("{}/{}/{}", ADDR, "get", 0);
+        let url = format!("{}{}/{}/{}", base_url(), ADDR, "get", 0);
         cli.get(url).send().await?.json::<Vec<Bubble>>().await?
     };
-    result.map_err(|e| log(&format!("Bubble error: {e}").into()))
+    result.map_err(|e| log(&format!("Fetch Bubble error: {e}").into()))
 }
 
 async fn async_send_bubbles(cli: Client, bubbles: Vec<Bubble>) -> Result<(), ()> {
     let result: anyhow::Result<()> = try {
-        let url = format!("{}/{}", ADDR, "set");
-        // let json = serde_json::to_string(bubbles)?;
+        let url = format!("{}{}/{}", base_url(), ADDR, "set");
         cli.post(url).json(&bubbles).send().await?;
-        // cli.post(url).body(&json).send().await?;
     };
-    result.map_err(|e| println!("Bubble error: {e}"))
+    result.map_err(|e| println!("Send Bubble error: {e}"))
 }
 
 #[derive(Clone, Debug)]
@@ -62,14 +62,11 @@ impl Application for Bubbles {
     type Message = Message;
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
-        // log(&"Testing logging".into());
         let cli = Client::new();
-        // let values = TcpStream::connect(addr);
 
         (
             Self {
                 cli: cli.clone(),
-                addr,
                 day: today(),
                 bubbles: Default::default(),
             },

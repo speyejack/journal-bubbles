@@ -12,7 +12,7 @@ getrandom = {version="*", features=["js"]}
 chrono = { version = "0.4.23", features = ["serde"] }
 serde_json = "1.0.103"
 anyhow = "1.0.72"
-web-sys = "0.3.64"
+web-sys = {version="0.3.64", features=['Window', 'Location']}
 reqwest = {version="0.11.18", features = ["json"]}
 
 # [lib]
